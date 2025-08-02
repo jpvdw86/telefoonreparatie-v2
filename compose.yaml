@@ -1,0 +1,95 @@
+x-base: &base
+  restart: unless-stopped
+  depends_on:
+    - rabbitmq
+    - mysql
+    - redis
+
+services:
+  app:
+    <<: *base
+    hostname: app
+
+  worker:
+    <<: *base
+    hostname: worker
+    entrypoint: /var/www/html/bin/console messenger:consume --all --limit=500 -vv
+    healthcheck:
+      test: ['CMD', '/usr/bin/pgrep', '-af', '^php.*bin/console.*messenger:consume']
+      start_period: 5s
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mysql:
+    image: mysql:8.0.32
+    restart: unless-stopped
+    hostname: mysql
+    command: --default-authentication-plugin=mysql_native_password
+    ports:
+      - 2306:3306
+    volumes:
+      - ./.docker/config/mysql:/etc/mysql/conf.d
+    healthcheck:
+      test: [ "CMD", "mysqladmin" ,"ping", "-h", "localhost", "-u", "root", "-paccess"]
+      start_period: 5s
+      interval: 5s
+      timeout: 5s
+      retries: 100
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_PASSWORD: access
+      MYSQL_USER: user
+      MYSQL_DATABASE: database
+
+  rabbitmq:
+    image: rabbitmq:3.8.9-management-alpine
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: "user"
+      RABBITMQ_DEFAULT_PASS: "access"
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - 15678:15672
+
+  redis:
+    image: bitnami/redis:6.2
+    hostname: redis
+    environment:
+      - REDIS_PASSWORD=access
+    healthcheck:
+      test: [ "CMD", "redis-cli", "-a", "access", "--raw", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - 6379:6379
+
+###> doctrine/doctrine-bundle ###
+  database:
+    image: postgres:${POSTGRES_VERSION:-16}-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-app}
+      # You should definitely change the password in production
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-!ChangeMe!}
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+    healthcheck:
+      test: ["CMD", "pg_isready", "-d", "${POSTGRES_DB:-app}", "-U", "${POSTGRES_USER:-app}"]
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    volumes:
+      - database_data:/var/lib/postgresql/data:rw
+      # You may use a bind-mounted host directory instead, so that it is harder to accidentally remove the volume and lose all your data!
+      # - ./docker/db/data:/var/lib/postgresql/data:rw
+###< doctrine/doctrine-bundle ###
+
+volumes:
+  database:
+###> doctrine/doctrine-bundle ###
+  database_data:
+###< doctrine/doctrine-bundle ###

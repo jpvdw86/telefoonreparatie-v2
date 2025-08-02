@@ -1,0 +1,28 @@
+x-base: &base
+  image: ${DOCKER_IMAGE}
+  restart: unless-stopped
+  environment:
+    - APP_ENV=test
+    - APP_DEBUG=0
+    - APP_SECRET=72c2d4642a6e5f284b9ddad6524865e8
+    - DATABASE_URL=mysql://root:access@mysql:3306/database
+    - RELEASE_VERSION=test
+    - RABBITMQ_DSN=amqp://user:access@rabbitmq:5672/%2f
+    - CORS_ALLOW_ORIGIN='^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$'
+    - SYMFONY_DEPRECATIONS_HELPER=disabled
+    - XDEBUG_SESSION=xdebug
+    - PHP_IDE_CONFIG=serverName=xdebug
+  depends_on:
+    rabbitmq:
+      condition: service_started
+    mysql:
+      condition: service_healthy
+
+services:
+  app:
+    hostname: app
+    <<: *base
+
+  worker:
+    hostname: worker
+    <<: *base

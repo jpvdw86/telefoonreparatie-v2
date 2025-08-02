@@ -1,0 +1,60 @@
+:80 {
+	root * /var/www/html/public
+	encode zstd gzip
+
+	php_fastcgi unix//var/run/php-fpm.sock {
+		index index.php
+		write_timeout 360s
+		read_timeout 360s
+		dial_timeout 360s
+	}
+
+	header * {
+		Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+		Expires "-1"
+		-Server
+		-X-Powered-By
+		X-XSS-Protection "1; mode=block"
+		X-Content-Type-Options "nosniff"
+	}
+
+    header /build/* {
+		Cache-Control "max-age=86400, private"
+		Expires "access plus 1 day"
+	}
+	header /bundles/* {
+		Cache-Control "max-age=86400, private"
+		Expires "access plus 1 day"
+	}
+	header /api/* {
+		Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+	}
+
+	file_server
+
+	log {
+		output stderr
+		level ERROR
+		format json
+	}
+	log {
+		output stdout
+		level INFO
+		format json
+	}
+}
+
+:1000 {
+    reverse_proxy /status unix//var/run/php-fpm.sock {
+		transport fastcgi {
+		    env SCRIPT_NAME /fpm-status
+			split .php
+		}
+	}
+	reverse_proxy /ping unix//var/run/php-fpm.sock {
+        transport fastcgi {
+        env SCRIPT_NAME /fpm-ping
+            split .php
+        }
+    }
+}

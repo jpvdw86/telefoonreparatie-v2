@@ -1,0 +1,6 @@
+# syntax=docker/dockerfile:1
+FROM r.yourgeek.nl/alpine-php:3.20-php83
+
+WORKDIR /var/www/html
+
+RUN apk add --no-cache php83-pecl-xdebug

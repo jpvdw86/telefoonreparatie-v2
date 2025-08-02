@@ -1,0 +1,63 @@
+x-base: &base
+  restart: unless-stopped
+  build:
+    context: .
+    dockerfile: Dockerfile.local
+  volumes:
+    - ./:/var/www/html
+    - ./.docker/config/php/20-php_config.ini:/etc/php83/conf.d/20-php_config.ini
+    - ./.docker/config/php/99-xdebug.ini:/etc/php83/conf.d/99-xdebug.ini
+    - ./.docker/config/php/php-fpm.conf:/etc/php83/php-fpm.d/www.conf
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  depends_on:
+    - rabbitmq
+    - mysql
+    - redis
+  environment:
+    - APP_ENV=dev
+    - APP_DEBUG=1
+    - APP_SECRET=72c2d4642a6e5f284b9ddad6524865e8
+    - DATABASE_URL=mysql://root:access@mysql:3306/database
+    - RELEASE_VERSION=local
+    - RABBITMQ_DSN=amqp://user:access@rabbitmq:5672/%2f
+    - CORS_ALLOW_ORIGIN='^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$'
+    - SYMFONY_DEPRECATIONS_HELPER=disabled
+    - XDEBUG_SESSION=xdebug
+    - PHP_IDE_CONFIG=serverName=xdebug
+
+services:
+  app:
+    hostname: app
+    command: /var/www/html/.docker/caddy/entrypoint.sh
+    ports:
+      - 4000:80
+      - 1000:1000
+    <<: *base
+
+  worker:
+    hostname: worker
+    <<: *base
+    entrypoint: /var/www/html/bin/console messenger:consume --all --limit=500 -vv
+    healthcheck:
+      test: ['CMD', '/usr/bin/pgrep', '-af', '^php.*bin/console.*messenger:consume']
+      start_period: 5s
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mailcatcher:
+    restart: unless-stopped
+    image: dockage/mailcatcher:0.8.2
+    ports:
+      - 1080:1080
+      - 1025:1025
+
+  mysql:
+    ports:
+      - 3306:3306
+    volumes:
+      - db:/var/lib/mysql:rw
+
+volumes:
+  db:
